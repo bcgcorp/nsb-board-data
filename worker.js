@@ -91,8 +91,9 @@ h1{font-size:20px;font-weight:700}.subtitle{font-size:13px;color:#6b7280;margin-
 .thumb{width:46px;height:46px;border-radius:8px;background:#eef2ff center/cover no-repeat;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#9aa3d0;font-size:9px}
 .h-main{flex:1;min-width:0}
 .h-title{font-size:13px;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.h-sub{display:flex;align-items:center;gap:8px;margin-top:2px}
+.h-sub{display:flex;align-items:center;gap:8px;margin-top:2px;flex-wrap:wrap}
 .h-price{font-size:13px;font-weight:700;color:#059669}.was{font-size:11px;color:#9ca3af;text-decoration:line-through;margin-left:4px}
+.allin-h{font-size:11px;color:#6b7280}.allin-h.over{color:#b91c1c;font-weight:600}
 .badge{font-size:11px;font-weight:700;background:#eef2ff;color:#4338ca;border-radius:10px;padding:1px 7px}
 .pill{font-size:10px;font-weight:600;border-radius:10px;padding:1px 7px;white-space:nowrap}
 .p-new{background:#eef2ff;color:#4338ca}.p-watched{background:#fef3c7;color:#92400e}.p-rejected{background:#f3f4f6;color:#6b7280}.p-na{background:#fee2e2;color:#991b1b}.p-gone{background:#f3f4f6;color:#6b7280}
@@ -100,6 +101,10 @@ h1{font-size:20px;font-weight:700}.subtitle{font-size:13px;color:#6b7280;margin-
 .photo{aspect-ratio:16/9;background:#eef2ff center/cover no-repeat;border-radius:8px;margin:10px 0;display:flex;align-items:center;justify-content:center;color:#9aa3d0;font-size:12px;cursor:pointer;position:relative}
 .photo .hint{position:absolute;bottom:6px;right:8px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:2px 6px;border-radius:6px}
 .meta{font-size:12px;color:#6b7280}.desc{font-size:12px;color:#4b5563;margin-top:6px}
+.fees{font-size:12px;margin-top:10px;padding:8px 10px;border-radius:8px;background:#f0f9f5;border:1px solid #cdeadd}
+.fees.over{background:#fef2f2;border-color:#fecaca}
+.fees .ai{font-weight:700;color:#065f46}.fees.over .ai{color:#991b1b}
+.fees .fn{display:block;margin-top:3px;color:#6b7280;font-size:11px;line-height:1.4}
 .src{font-size:11px;color:#9ca3af;margin-top:6px}
 .lnk{display:inline-flex;gap:4px;font-size:12px;color:#4f46e5;text-decoration:none;margin-top:6px}.lnk:hover{text-decoration:underline}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
@@ -135,10 +140,14 @@ async function setDecision(id,d,e){if(e)e.stopPropagation();DATA.kv.decisions[id
 async function toggleChip(id,f,e){if(e)e.stopPropagation();const l=DATA.listings.find(x=>x.id===id);const cur=chk(l,f);DATA.kv.overrides[id]=DATA.kv.overrides[id]||{};DATA.kv.overrides[id][f]=!cur;render();await q('/api/score',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id,field:f,value:!cur})});}
 async function setPhoto(id,e){if(e)e.stopPropagation();const cur=(DATA.kv.photos||{})[id]||'';const u=prompt('Paste an image URL for this listing (blank to clear):',cur);if(u===null)return;DATA.kv.photos[id]=u.trim();render();toast('Photo saved');await q('/api/photo',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id,image:u.trim()})});}
 function esc(s){return (s||'').replace(/'/g,"%27").replace(/"/g,'&quot;');}
+function escH(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function card(l){const img=(DATA.kv.photos||{})[l.id]||'';const sc=score(l);const st=statusOf(l);
  const pill={new:['p-new','New'],watched:['p-watched','Watched'],rejected:['p-rejected','Rejected'],notavailable:['p-na','Not Available'],gone:['p-gone','Gone']}[st];
  const thumb=img?'style="background-image:url(\\''+esc(img)+'\\')"':'';
  const was=l.priceWas?'<span class="was">'+l.priceWas+'</span>':'';
+ const ai=l.allIn||'';const over=/OVER/i.test(ai)||/OVER/i.test(l.feesNote||'');
+ const aiHead=ai?'<span class="allin-h'+(over?' over':'')+'">· all-in '+escH(ai)+'</span>':'';
+ const fees=ai?'<div class="fees'+(over?' over':'')+'"><span class="ai">All-in: '+escH(ai)+'</span>'+(l.feesNote?'<span class="fn">'+escH(l.feesNote)+'</span>':'')+'</div>':'';
  const chips=FIELDS.map(([f,lab])=>'<span class="chip '+(chk(l,f)?'on':'')+'" onclick="toggleChip(\\''+l.id+'\\',\\''+f+'\\',event)">'+(chk(l,f)?'✓ ':'')+lab+'</span>').join('');
  let acts='';
  if(st==='watched')acts='<button class="btn b-unwatch" onclick="setDecision(\\''+l.id+'\\',\\'new\\',event)">Unwatch</button><button class="btn b-na" onclick="setDecision(\\''+l.id+'\\',\\'notavailable\\',event)">Not avail</button><button class="btn b-reject" onclick="setDecision(\\''+l.id+'\\',\\'rejected\\',event)">✕ Pass</button>';
@@ -146,9 +155,9 @@ function card(l){const img=(DATA.kv.photos||{})[l.id]||'';const sc=score(l);cons
  else if(st==='notavailable')acts='<button class="btn b-watch" onclick="setDecision(\\''+l.id+'\\',\\'watched\\',event)">★ Re-watch</button><button class="btn b-reject" onclick="setDecision(\\''+l.id+'\\',\\'rejected\\',event)">✕ Pass</button>';
  else if(st==='gone')acts='<button class="btn b-watch" onclick="setDecision(\\''+l.id+'\\',\\'watched\\',event)">★ Watch</button><button class="btn b-reject" onclick="setDecision(\\''+l.id+'\\',\\'rejected\\',event)">✕ Pass</button>';
  else acts='<button class="btn b-watch" onclick="setDecision(\\''+l.id+'\\',\\'watched\\',event)">★ Watch</button><button class="btn b-na" onclick="setDecision(\\''+l.id+'\\',\\'notavailable\\',event)">Not avail</button><button class="btn b-reject" onclick="setDecision(\\''+l.id+'\\',\\'rejected\\',event)">✕ Pass</button>';
- return '<details class="card"><summary class="head"><div class="thumb" '+thumb+'>'+(img?'':'no photo')+'</div><div class="h-main"><div class="h-title">'+l.title+'</div><div class="h-sub"><span class="h-price">'+l.price+was+'</span><span class="pill '+pill[0]+'">'+pill[1]+'</span></div></div><span class="badge">'+sc+'/7</span></summary>'+
+ return '<details class="card"><summary class="head"><div class="thumb" '+thumb+'>'+(img?'':'no photo')+'</div><div class="h-main"><div class="h-title">'+l.title+'</div><div class="h-sub"><span class="h-price">'+l.price+was+'</span>'+aiHead+'<span class="pill '+pill[0]+'">'+pill[1]+'</span></div></div><span class="badge">'+sc+'/7</span></summary>'+
   '<div class="body"><div class="photo" '+thumb+' onclick="setPhoto(\\''+l.id+'\\',event)">'+(img?'':'＋ add photo')+'<span class="hint">edit photo</span></div>'+
-  '<div class="meta">'+l.meta+'</div><div class="desc">'+(l.description||'')+'</div><div class="src">via '+l.source+' · found '+l.dateFound+(l.sqft?' · '+l.sqft+' sqft':'')+'</div>'+
+  '<div class="meta">'+l.meta+'</div><div class="desc">'+(l.description||'')+'</div>'+fees+'<div class="src">via '+l.source+' · found '+l.dateFound+(l.sqft?' · '+l.sqft+' sqft':'')+'</div>'+
   '<a class="lnk" href="'+l.url+'" target="_blank" rel="noopener">Open listing ↗</a>'+
   '<div class="chips">'+chips+'</div><div class="actions">'+acts+'</div></div></details>';}
 function sec(key,title,cls,items){if(!items.length&&(cls==='rejected'||cls==='gone'||cls==='na'))return '';
