@@ -5,10 +5,8 @@ workers_dev = true
 
 # Workers KV namespace that stores user state (decisions, score overrides, photos).
 # The Worker reads/writes it as env.NSB_KV.
-# Replace the id below with your real namespace id. Find it with:
-#   wrangler kv namespace list
 kv_namespaces = [
-  { binding = "NSB_KV", id = "REPLACE_WITH_NSB_KV_NAMESPACE_ID" }
+  { binding = "NSB_KV", id = "0f56343b281c437296ed02d624b20995" }
 ]
 
 # VIEW_KEY (the board's share-link access key) is intentionally NOT defined here —
