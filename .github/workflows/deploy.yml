@@ -1,0 +1,26 @@
+name: Deploy Worker
+
+# Deploys the Cloudflare Worker when worker.js changes on main.
+# listings.json is intentionally NOT a trigger — the Worker fetches it at
+# runtime, so listing updates (incl. the daily task's commits) need no deploy.
+# Use the "Run workflow" button (workflow_dispatch) for a manual deploy,
+# e.g. after editing wrangler.toml or setting up secrets the first time.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'worker.js'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
