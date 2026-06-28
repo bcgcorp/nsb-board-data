@@ -1,5 +1,5 @@
 /*
- * NSB Apartment Finder — Cloudflare Worker (v2)
+ * NSB Apartment Finder — Cloudflare Worker (v3)
  * Listings come from a public GitHub repo (daily task writes them via connector).
  * User state (decisions, score overrides, photos) lives in Workers KV.
  *
@@ -122,27 +122,35 @@ h1{font-size:20px;font-weight:700}.subtitle{font-size:13px;color:#6b7280;margin-
 </style></head><body>
 <h1>New Smyrna Beach Apartment Finder</h1>
 <p class="subtitle" id="subtitle"></p>
-<div class="tabs" id="tabs">
-  <button class="tab on" id="tab-ocean" onclick="setTab('ocean')">🌊 Ocean Condos · 12-mo</button>
-  <button class="tab" id="tab-bridge" onclick="setTab('bridge')">🏠 Bridge Houses · 2–3 mo</button>
-</div>
+<div class="tabs" id="tabs"></div>
 <div class="stats" id="stats"></div>
 <div id="secs"></div>
 <div class="toast" id="toast"></div>
 <script>
 const KEY="__VIEW_KEY__";
-const FIELDS=[["preferred","Preferred"],["oceanView","Ocean View"],["balcony","Balcony/Porch"],["screened","Screened"],["pool","Pool"],["petFriendly","Pet Friendly"],["bigSqft",">2100 sqft"]];
-const SUBTITLES={ocean:"3BR · Ocean View · Porch · Max $5,500/mo · shared with Stephanie · tap a card for details",bridge:"3+BR houses · pets incl. cats · 2–3 mo bridge stay · Deland↔NSB corridor · furnished or unfurnished · all-in ≤ $9,000/mo"};
+// Ocean tab keeps Balcony/Porch; the three house tabs score "Screened Patio" instead.
+const OCEAN_FIELDS=[["preferred","Preferred"],["oceanView","Ocean View"],["balcony","Balcony/Porch"],["screened","Screened"],["pool","Pool"],["petFriendly","Pet Friendly"],["bigSqft",">2100 sqft"]];
+const HOUSE_FIELDS=[["preferred","Preferred"],["oceanView","Ocean View"],["screened","Screened Patio"],["pool","Pool"],["petFriendly","Pet Friendly"],["bigSqft",">2100 sqft"]];
+const FIELDS_BY_CAT={"ocean":OCEAN_FIELDS,"bridge":HOUSE_FIELDS,"bridge-unf":HOUSE_FIELDS,"lease-unf":HOUSE_FIELDS};
+const TABS=[["ocean","🌊 Ocean Condos · 12-mo"],["bridge","🏠 Bridge Houses · 2–3 mo · furnished"],["bridge-unf","🏚️ Bridge Unfurnished · 2–3 mo · houses+apts"],["lease-unf","🏡 12-mo Unfurnished · houses+apts"]];
+const SUBTITLES={
+ "ocean":"3BR · Ocean View · Porch · Max $5,500/mo · shared with Stephanie · tap a card for details",
+ "bridge":"3+BR FURNISHED houses · pets incl. cats · 2–3 mo bridge stay · DeLand↔NSB corridor · screened patio · all-in ≤ $9,000/mo",
+ "bridge-unf":"3+BR UNFURNISHED houses & apartments · pets incl. cats · 2–3 mo bridge stay · DeLand↔NSB corridor · screened patio · all-in ≤ $9,000/mo",
+ "lease-unf":"3+BR UNFURNISHED houses & apartments · pets incl. cats · 12-month lease · DeLand↔NSB corridor · screened patio · all-in ≤ $6,000/mo (pt ≤$5,500)"
+};
 let DATA={listings:[],kv:{decisions:{},decisionTs:{},overrides:{},photos:{}}};
 let currentTab="ocean";
 let collapsed={rejected:true,gone:true,notavailable:false};
 const q=(u,o)=>fetch(u+(u.includes('?')?'&':'?')+'k='+encodeURIComponent(KEY),o);
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500);}
-async function load(){const r=await q('/api/data');DATA=await r.json();render();}
+async function load(){const r=await q('/api/data');DATA=await r.json();renderTabs();render();}
 function catOf(l){return l.category||'ocean';}
-function setTab(t){currentTab=t;document.getElementById('tab-ocean').classList.toggle('on',t==='ocean');document.getElementById('tab-bridge').classList.toggle('on',t==='bridge');render();}
+function curFields(){return FIELDS_BY_CAT[currentTab]||OCEAN_FIELDS;}
+function renderTabs(){document.getElementById('tabs').innerHTML=TABS.map(([k,lab])=>'<button class="tab'+(k===currentTab?' on':'')+'" onclick="setTab(\\''+k+'\\')">'+lab+'</button>').join('');}
+function setTab(t){currentTab=t;renderTabs();render();}
 function chk(l,f){const o=(DATA.kv.overrides||{})[l.id]||{};if(f in o)return !!o[f];if(f==='preferred')return false;return !!(l.auto&&l.auto[f]);}
-function score(l){return FIELDS.reduce((n,[f])=>n+(chk(l,f)?1:0),0);}
+function score(l){return curFields().reduce((n,[f])=>n+(chk(l,f)?1:0),0);}
 function statusOf(l){const id=l.id;const base=(DATA.kv.decisions||{})[id]||'new';
   if(base==='watched')return 'watched';if(base==='rejected')return 'rejected';
   if(base==='notavailable'){const ts=(DATA.kv.decisionTs||{})[id];if(l.availableSince&&ts&&l.availableSince>ts)return 'watched';return 'notavailable';}
@@ -152,21 +160,21 @@ async function toggleChip(id,f,e){if(e)e.stopPropagation();const l=DATA.listings
 async function setPhoto(id,e){if(e)e.stopPropagation();const cur=(DATA.kv.photos||{})[id]||'';const u=prompt('Paste an image URL for this listing (blank to clear):',cur);if(u===null)return;DATA.kv.photos[id]=u.trim();render();toast('Photo saved');await q('/api/photo',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id,image:u.trim()})});}
 function esc(s){return (s||'').replace(/'/g,"%27").replace(/"/g,'&quot;');}
 function escH(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function card(l){const img=(DATA.kv.photos||{})[l.id]||'';const sc=score(l);const st=statusOf(l);
+function card(l){const img=(DATA.kv.photos||{})[l.id]||'';const sc=score(l);const denom=curFields().length;const st=statusOf(l);
  const pill={new:['p-new','New'],watched:['p-watched','Watched'],rejected:['p-rejected','Rejected'],notavailable:['p-na','Not Available'],gone:['p-gone','Gone']}[st];
  const thumb=img?'style="background-image:url(\\''+esc(img)+'\\')"':'';
  const was=l.priceWas?'<span class="was">'+l.priceWas+'</span>':'';
  const ai=l.allIn||'';const over=/OVER/i.test(ai)||/OVER/i.test(l.feesNote||'');
  const aiHead=ai?'<span class="allin-h'+(over?' over':'')+'">· all-in '+escH(ai)+'</span>':'';
  const fees=ai?'<div class="fees'+(over?' over':'')+'"><span class="ai">All-in: '+escH(ai)+'</span>'+(l.feesNote?'<span class="fn">'+escH(l.feesNote)+'</span>':'')+'</div>':'';
- const chips=FIELDS.map(([f,lab])=>'<span class="chip '+(chk(l,f)?'on':'')+'" onclick="toggleChip(\\''+l.id+'\\',\\''+f+'\\',event)">'+(chk(l,f)?'✓ ':'')+lab+'</span>').join('');
+ const chips=curFields().map(([f,lab])=>'<span class="chip '+(chk(l,f)?'on':'')+'" onclick="toggleChip(\\''+l.id+'\\',\\''+f+'\\',event)">'+(chk(l,f)?'✓ ':'')+lab+'</span>').join('');
  let acts='';
  if(st==='watched')acts='<button class="btn b-unwatch" onclick="setDecision(\\''+l.id+'\\',\\'new\\',event)">Unwatch</button><button class="btn b-na" onclick="setDecision(\\''+l.id+'\\',\\'notavailable\\',event)">Not avail</button><button class="btn b-reject" onclick="setDecision(\\''+l.id+'\\',\\'rejected\\',event)">✕ Pass</button>';
  else if(st==='rejected')acts='<button class="btn b-restore" onclick="setDecision(\\''+l.id+'\\',\\'new\\',event)">↺ Restore</button>';
  else if(st==='notavailable')acts='<button class="btn b-watch" onclick="setDecision(\\''+l.id+'\\',\\'watched\\',event)">★ Re-watch</button><button class="btn b-reject" onclick="setDecision(\\''+l.id+'\\',\\'rejected\\',event)">✕ Pass</button>';
  else if(st==='gone')acts='<button class="btn b-watch" onclick="setDecision(\\''+l.id+'\\',\\'watched\\',event)">★ Watch</button><button class="btn b-reject" onclick="setDecision(\\''+l.id+'\\',\\'rejected\\',event)">✕ Pass</button>';
  else acts='<button class="btn b-watch" onclick="setDecision(\\''+l.id+'\\',\\'watched\\',event)">★ Watch</button><button class="btn b-na" onclick="setDecision(\\''+l.id+'\\',\\'notavailable\\',event)">Not avail</button><button class="btn b-reject" onclick="setDecision(\\''+l.id+'\\',\\'rejected\\',event)">✕ Pass</button>';
- return '<details class="card"><summary class="head"><div class="thumb" '+thumb+'>'+(img?'':'no photo')+'</div><div class="h-main"><div class="h-title">'+l.title+'</div><div class="h-sub"><span class="h-price">'+l.price+was+'</span>'+aiHead+'<span class="pill '+pill[0]+'">'+pill[1]+'</span></div></div><span class="badge">'+sc+'/7</span></summary>'+
+ return '<details class="card"><summary class="head"><div class="thumb" '+thumb+'>'+(img?'':'no photo')+'</div><div class="h-main"><div class="h-title">'+l.title+'</div><div class="h-sub"><span class="h-price">'+l.price+was+'</span>'+aiHead+'<span class="pill '+pill[0]+'">'+pill[1]+'</span></div></div><span class="badge">'+sc+'/'+denom+'</span></summary>'+
   '<div class="body"><div class="photo" '+thumb+' onclick="setPhoto(\\''+l.id+'\\',event)">'+(img?'':'＋ add photo')+'<span class="hint">edit photo</span></div>'+
   '<div class="meta">'+l.meta+'</div><div class="desc">'+(l.description||'')+'</div>'+fees+'<div class="src">via '+l.source+' · found '+l.dateFound+(l.sqft?' · '+l.sqft+' sqft':'')+'</div>'+
   '<a class="lnk" href="'+l.url+'" target="_blank" rel="noopener">Open listing ↗</a>'+
@@ -181,10 +189,10 @@ function render(){const g={new:[],watched:[],notavailable:[],rejected:[],gone:[]
  document.getElementById('subtitle').textContent=SUBTITLES[currentTab]||'';
  document.getElementById('stats').innerHTML='<span><span class="dot d-new"></span>'+g.new.length+' new</span><span><span class="dot d-watched"></span>'+g.watched.length+' watched</span><span><span class="dot d-na"></span>'+g.notavailable.length+' not avail</span><span><span class="dot d-rejected"></span>'+g.rejected.length+' rejected</span>'+(g.gone.length?'<span><span class="dot d-gone"></span>'+g.gone.length+' gone</span>':'');
  document.getElementById('secs').innerHTML=
-   sec('new','🆕 New Listings','',g.new)+
+   sec('new','\u{1F195} New Listings','',g.new)+
    sec('watched','⭐ Watched','watched',g.watched)+
-   sec('notavailable','🚧 Not Available','na',g.notavailable)+
-   sec('rejected','🚫 Rejected','rejected',g.rejected)+
-   sec('gone','📦 Gone','gone',g.gone);}
+   sec('notavailable','\u{1F6A7} Not Available','na',g.notavailable)+
+   sec('rejected','\u{1F6AB} Rejected','rejected',g.rejected)+
+   sec('gone','\u{1F4E6} Gone','gone',g.gone);}
 load();
 </script></body></html>`;
