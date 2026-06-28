@@ -132,11 +132,11 @@ const KEY="__VIEW_KEY__";
 const OCEAN_FIELDS=[["preferred","Preferred"],["oceanView","Ocean View"],["balcony","Balcony/Porch"],["screened","Screened"],["pool","Pool"],["petFriendly","Pet Friendly"],["bigSqft",">2100 sqft"]];
 const HOUSE_FIELDS=[["preferred","Preferred"],["oceanView","Ocean View"],["screened","Screened Patio"],["pool","Pool"],["petFriendly","Pet Friendly"],["bigSqft",">2100 sqft"]];
 const FIELDS_BY_CAT={"ocean":OCEAN_FIELDS,"bridge":HOUSE_FIELDS,"bridge-unf":HOUSE_FIELDS,"lease-unf":HOUSE_FIELDS};
-const TABS=[["ocean","🌊 Ocean Condos · 12-mo"],["bridge","🏠 Bridge Houses · 2–3 mo · furnished"],["bridge-unf","🏚️ Bridge Unfurnished · 2–3 mo · houses+apts"],["lease-unf","🏡 12-mo Unfurnished · houses+apts"]];
+const TABS=[["ocean","🌊 Ocean Condos · 12-mo"],["bridge","🏠 Bridge Houses · 2–3 mo · furnished"],["bridge-unf","🏚️ Bridge Unfurnished · 2–3 mo · houses+apts+condos"],["lease-unf","🏡 12-mo Unfurnished · houses+apts"]];
 const SUBTITLES={
  "ocean":"3BR · Ocean View · Porch · Max $5,500/mo · shared with Stephanie · tap a card for details",
  "bridge":"3+BR FURNISHED houses · pets incl. cats · 2–3 mo bridge stay · DeLand↔NSB corridor · screened patio · all-in ≤ $9,000/mo",
- "bridge-unf":"3+BR UNFURNISHED houses & apartments · pets incl. cats · 2–3 mo bridge stay · DeLand↔NSB corridor · screened patio · all-in ≤ $9,000/mo",
+ "bridge-unf":"3+BR UNFURNISHED houses, apartments & condos · pets incl. cats · 2–3 mo bridge stay · DeLand↔NSB corridor · screened patio · all-in ≤ $9,000/mo",
  "lease-unf":"3+BR UNFURNISHED houses & apartments · pets incl. cats · 12-month lease · DeLand↔NSB corridor · screened patio · all-in ≤ $6,000/mo (pt ≤$5,500)"
 };
 let DATA={listings:[],kv:{decisions:{},decisionTs:{},overrides:{},photos:{}}};
@@ -189,10 +189,10 @@ function render(){const g={new:[],watched:[],notavailable:[],rejected:[],gone:[]
  document.getElementById('subtitle').textContent=SUBTITLES[currentTab]||'';
  document.getElementById('stats').innerHTML='<span><span class="dot d-new"></span>'+g.new.length+' new</span><span><span class="dot d-watched"></span>'+g.watched.length+' watched</span><span><span class="dot d-na"></span>'+g.notavailable.length+' not avail</span><span><span class="dot d-rejected"></span>'+g.rejected.length+' rejected</span>'+(g.gone.length?'<span><span class="dot d-gone"></span>'+g.gone.length+' gone</span>':'');
  document.getElementById('secs').innerHTML=
-   sec('new','\u{1F195} New Listings','',g.new)+
+   sec('new','🆕 New Listings','',g.new)+
    sec('watched','⭐ Watched','watched',g.watched)+
-   sec('notavailable','\u{1F6A7} Not Available','na',g.notavailable)+
-   sec('rejected','\u{1F6AB} Rejected','rejected',g.rejected)+
-   sec('gone','\u{1F4E6} Gone','gone',g.gone);}
+   sec('notavailable','🚧 Not Available','na',g.notavailable)+
+   sec('rejected','🚫 Rejected','rejected',g.rejected)+
+   sec('gone','📦 Gone','gone',g.gone);}
 load();
 </script></body></html>`;
