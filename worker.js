@@ -77,6 +77,9 @@ const PAGE_HTML = `<!DOCTYPE html><html lang="en"><head>
 :root{color-scheme:light}*{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8f9fa;color:#1a1a2e;padding:16px;line-height:1.45}
 h1{font-size:20px;font-weight:700}.subtitle{font-size:13px;color:#6b7280;margin-bottom:12px}
+.tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.tab{border:1px solid #d1d5db;background:#fff;color:#374151;font-size:13px;font-weight:600;padding:7px 14px;border-radius:18px;cursor:pointer}
+.tab.on{background:#1a1a2e;border-color:#1a1a2e;color:#fff}
 .stats{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#6b7280;margin-bottom:14px}
 .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
 .d-new{background:#6366f1}.d-watched{background:#f59e0b}.d-rejected{background:#9ca3af}.d-na{background:#ef4444}.d-gone{background:#6b7280}
@@ -118,18 +121,26 @@ h1{font-size:20px;font-weight:700}.subtitle{font-size:13px;color:#6b7280;margin-
 .collapsed{display:none}
 </style></head><body>
 <h1>New Smyrna Beach Apartment Finder</h1>
-<p class="subtitle">3BR · Ocean View · Porch · Max $5,500/mo · shared with Stephanie · tap a card for details</p>
+<p class="subtitle" id="subtitle"></p>
+<div class="tabs" id="tabs">
+  <button class="tab on" id="tab-ocean" onclick="setTab('ocean')">🌊 Ocean Condos · 12-mo</button>
+  <button class="tab" id="tab-bridge" onclick="setTab('bridge')">🏠 Bridge Houses · 2–3 mo</button>
+</div>
 <div class="stats" id="stats"></div>
 <div id="secs"></div>
 <div class="toast" id="toast"></div>
 <script>
 const KEY="__VIEW_KEY__";
 const FIELDS=[["preferred","Preferred"],["oceanView","Ocean View"],["balcony","Balcony/Porch"],["screened","Screened"],["pool","Pool"],["petFriendly","Pet Friendly"],["bigSqft",">2100 sqft"]];
+const SUBTITLES={ocean:"3BR · Ocean View · Porch · Max $5,500/mo · shared with Stephanie · tap a card for details",bridge:"3+BR houses · pets incl. cats · 2–3 mo bridge stay · Deland↔NSB corridor · furnished or unfurnished · all-in ≤ $9,000/mo"};
 let DATA={listings:[],kv:{decisions:{},decisionTs:{},overrides:{},photos:{}}};
+let currentTab="ocean";
 let collapsed={rejected:true,gone:true,notavailable:false};
 const q=(u,o)=>fetch(u+(u.includes('?')?'&':'?')+'k='+encodeURIComponent(KEY),o);
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500);}
 async function load(){const r=await q('/api/data');DATA=await r.json();render();}
+function catOf(l){return l.category||'ocean';}
+function setTab(t){currentTab=t;document.getElementById('tab-ocean').classList.toggle('on',t==='ocean');document.getElementById('tab-bridge').classList.toggle('on',t==='bridge');render();}
 function chk(l,f){const o=(DATA.kv.overrides||{})[l.id]||{};if(f in o)return !!o[f];if(f==='preferred')return false;return !!(l.auto&&l.auto[f]);}
 function score(l){return FIELDS.reduce((n,[f])=>n+(chk(l,f)?1:0),0);}
 function statusOf(l){const id=l.id;const base=(DATA.kv.decisions||{})[id]||'new';
@@ -165,8 +176,9 @@ function sec(key,title,cls,items){if(!items.length&&(cls==='rejected'||cls==='go
  return '<div class="sec-title '+cls+'" onclick="collapsed[\\''+key+'\\']=!collapsed[\\''+key+'\\'];render()">'+(open?'▾':'▸')+' '+title+' <span class="count">'+items.length+'</span></div>'+
    '<div class="grid '+(open?'':'collapsed')+'">'+(items.length?items.map(card).join(''):'<div class="empty">Nothing here yet</div>')+'</div>';}
 function render(){const g={new:[],watched:[],notavailable:[],rejected:[],gone:[]};
- DATA.listings.forEach(l=>{g[statusOf(l)].push(l);});
+ DATA.listings.filter(l=>catOf(l)===currentTab).forEach(l=>{g[statusOf(l)].push(l);});
  g.watched.sort((a,b)=>score(b)-score(a));g.new.sort((a,b)=>score(b)-score(a));
+ document.getElementById('subtitle').textContent=SUBTITLES[currentTab]||'';
  document.getElementById('stats').innerHTML='<span><span class="dot d-new"></span>'+g.new.length+' new</span><span><span class="dot d-watched"></span>'+g.watched.length+' watched</span><span><span class="dot d-na"></span>'+g.notavailable.length+' not avail</span><span><span class="dot d-rejected"></span>'+g.rejected.length+' rejected</span>'+(g.gone.length?'<span><span class="dot d-gone"></span>'+g.gone.length+' gone</span>':'');
  document.getElementById('secs').innerHTML=
    sec('new','🆕 New Listings','',g.new)+
