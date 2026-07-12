@@ -7,6 +7,7 @@
  * Share link: https://<worker>.workers.dev/?k=<VIEW_KEY>
  */
 const GH_RAW = "https://raw.githubusercontent.com/bcgcorp/nsb-board-data/main/listings.json";
+const GH_COMMITS = "https://api.github.com/repos/bcgcorp/nsb-board-data/commits?path=listings.json&sha=main&per_page=1";
 
 async function loadListings() {
   try {
@@ -14,6 +15,18 @@ async function loadListings() {
     if (!r.ok) return [];
     return await r.json();
   } catch (e) { return []; }
+}
+// When was listings.json last committed? Reflects the daily task's most recent data write.
+async function loadLastUpdated() {
+  try {
+    const r = await fetch(GH_COMMITS, {
+      headers: { "User-Agent": "nsb-board-worker", "Accept": "application/vnd.github+json" },
+      cf: { cacheTtl: 300 }
+    });
+    if (!r.ok) return null;
+    const arr = await r.json();
+    return (arr && arr[0] && arr[0].commit && arr[0].commit.committer && arr[0].commit.committer.date) || null;
+  } catch (e) { return null; }
 }
 async function loadKV(env) {
   const raw = await env.NSB_KV.get("state");
@@ -33,8 +46,8 @@ export default {
       return new Response("Forbidden — append ?k=<your key> to the URL.", { status: 403 });
     }
     if (path === "/api/data" && request.method === "GET") {
-      const [listings, kv] = await Promise.all([loadListings(), loadKV(env)]);
-      return json({ listings, kv });
+      const [listings, kv, lastUpdated] = await Promise.all([loadListings(), loadKV(env), loadLastUpdated()]);
+      return json({ listings, kv, lastUpdated });
     }
     if (path === "/api/decision" && request.method === "POST") {
       const { id, decision } = await request.json().catch(() => ({}));
@@ -77,6 +90,8 @@ const PAGE_HTML = `<!DOCTYPE html><html lang="en"><head>
 :root{color-scheme:light}*{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8f9fa;color:#1a1a2e;padding:16px;line-height:1.45}
 h1{font-size:20px;font-weight:700}.subtitle{font-size:13px;color:#6b7280;margin-bottom:12px}
+.updated{font-size:12px;color:#9ca3af;margin:-6px 0 12px;display:flex;align-items:center;gap:6px}
+.updated .u-dot{width:7px;height:7px;border-radius:50%;background:#10b981;display:inline-block}
 .tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
 .tab{border:1px solid #d1d5db;background:#fff;color:#374151;font-size:13px;font-weight:600;padding:7px 14px;border-radius:18px;cursor:pointer}
 .tab.on{background:#1a1a2e;border-color:#1a1a2e;color:#fff}
@@ -122,6 +137,7 @@ h1{font-size:20px;font-weight:700}.subtitle{font-size:13px;color:#6b7280;margin-
 </style></head><body>
 <h1>New Smyrna Beach Apartment Finder</h1>
 <p class="subtitle" id="subtitle"></p>
+<p class="updated" id="lastupdated"></p>
 <div class="tabs" id="tabs"></div>
 <div class="stats" id="stats"></div>
 <div id="secs"></div>
@@ -139,12 +155,25 @@ const SUBTITLES={
  "bridge-unf":"3+BR UNFURNISHED houses, apartments & condos · pets incl. cats · 2–3 mo bridge stay · DeLand↔NSB corridor · screened patio · all-in ≤ $9,000/mo",
  "lease-unf":"3+BR UNFURNISHED houses & apartments · pets incl. cats · 12-month lease · DeLand↔NSB corridor · screened patio · all-in ≤ $6,000/mo (pt ≤$5,500)"
 };
-let DATA={listings:[],kv:{decisions:{},decisionTs:{},overrides:{},photos:{}}};
+let DATA={listings:[],kv:{decisions:{},decisionTs:{},overrides:{},photos:{}},lastUpdated:null};
 let currentTab="ocean";
 let collapsed={rejected:true,gone:true,notavailable:false};
 const q=(u,o)=>fetch(u+(u.includes('?')?'&':'?')+'k='+encodeURIComponent(KEY),o);
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1500);}
-async function load(){const r=await q('/api/data');DATA=await r.json();renderTabs();render();}
+async function load(){const r=await q('/api/data');DATA=await r.json();renderUpdated();renderTabs();render();}
+// "Data last updated" — prefer the listings.json commit time from the API; fall back to the newest date in the data.
+function renderUpdated(){
+  let iso=DATA.lastUpdated;
+  if(!iso){
+    const ds=(DATA.listings||[]).flatMap(l=>[l.dateFound,l.availableSince].filter(Boolean)).sort();
+    iso=ds.length?ds[ds.length-1]+'T00:00:00':null;
+  }
+  const el=document.getElementById('lastupdated');
+  if(!el)return;
+  const d=iso?new Date(iso):null;
+  if(!d||isNaN(d)){el.textContent='';return;}
+  el.innerHTML='<span class="u-dot"></span>Data last updated: '+d.toLocaleString([],{dateStyle:'medium',timeStyle:'short'});
+}
 function catOf(l){return l.category||'ocean';}
 function curFields(){return FIELDS_BY_CAT[currentTab]||OCEAN_FIELDS;}
 function renderTabs(){document.getElementById('tabs').innerHTML=TABS.map(([k,lab])=>'<button class="tab'+(k===currentTab?' on':'')+'" onclick="setTab(\\''+k+'\\')">'+lab+'</button>').join('');}
