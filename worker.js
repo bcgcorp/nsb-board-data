@@ -6,17 +6,48 @@
  * Bindings: KV namespace NSB_KV; vars VIEW_KEY (share-link key), WRITE_TOKEN (unused now, kept).
  * Share link: https://<worker>.workers.dev/?k=<VIEW_KEY>
  */
-const GH_RAW = "https://raw.githubusercontent.com/bcgcorp/nsb-board-data/main/listings.json";
-const GH_COMMITS = "https://api.github.com/repos/bcgcorp/nsb-board-data/commits?path=listings.json&sha=main&per_page=1";
+const GH_BASE = "https://raw.githubusercontent.com/bcgcorp/nsb-board-data/main/";
+const GH_RAW = GH_BASE + "listings.json";                 // legacy monolith (fallback)
+const GH_INDEX = GH_BASE + "data/index.json";             // lists the shard filenames
+// Reflects the most recent data write (shard commits now live under data/).
+const GH_COMMITS = "https://api.github.com/repos/bcgcorp/nsb-board-data/commits?path=data&sha=main&per_page=1";
 
+async function fetchJson(url) {
+  const r = await fetch(url + "?t=" + Date.now(), { cf: { cacheTtl: 60 } });
+  if (!r.ok) throw new Error("http " + r.status);
+  return await r.json();
+}
+
+// Listings are sharded into data/part-*.json (enumerated in data/index.json) so the
+// data file stays writable in small blocks. Merge all shards (dedup by id). If the
+// shards can't be read, fall back to the legacy monolithic listings.json so the
+// board never goes blank.
 async function loadListings() {
+  try {
+    const idx = await fetchJson(GH_INDEX);
+    if (Array.isArray(idx) && idx.length) {
+      const parts = await Promise.all(
+        idx.map(name => fetchJson(GH_BASE + "data/" + name).catch(() => []))
+      );
+      const merged = [];
+      const seen = new Set();
+      for (const arr of parts) {
+        if (Array.isArray(arr)) {
+          for (const l of arr) {
+            if (l && l.id && !seen.has(l.id)) { seen.add(l.id); merged.push(l); }
+          }
+        }
+      }
+      if (merged.length) return merged;
+    }
+  } catch (e) { /* fall through to legacy monolith */ }
   try {
     const r = await fetch(GH_RAW + "?t=" + Date.now(), { cf: { cacheTtl: 60 } });
     if (!r.ok) return [];
     return await r.json();
   } catch (e) { return []; }
 }
-// When was listings.json last committed? Reflects the daily task's most recent data write.
+// When was the data last committed? Reflects the daily task's most recent data write.
 async function loadLastUpdated() {
   try {
     const r = await fetch(GH_COMMITS, {
